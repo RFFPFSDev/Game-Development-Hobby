@@ -3,7 +3,7 @@ version 42
 __lua__
 -- main game
 function _init()
-	state=intro
+	state=menu--intro
 end
 
 function _update()
@@ -86,11 +86,17 @@ levels[1] = {
 	obs_speed = 2,
 	add_obstacle = function(this)
 	  this.obstacle={x = flr(128+rnd(128))}
-			this.obs_speed=flr(1+rnd(2))
+		this.obs_speed=flr(1+rnd(2))
 	end,
 	init = function(this)
-			this:add_obstacle()
-      nn:init(1,{1})
+    this:add_obstacle()
+    nn:init({{
+      desc = "distance to next obstacle", 
+      value = 0
+    }},{1},{{
+      desc = "jump", 
+      value = false
+    }})
 	end,
 	update = function(this)
 			this.obstacle.x -= this.obs_speed
@@ -100,8 +106,9 @@ levels[1] = {
    end
    
    local x0 = this.dino_x - this.obstacle.x
-   y = nn:update({x0})
-   
+   nn:update({x0})
+   local y = nn.output[1].value
+
    if y and this.on_ground then
     this.dino_vy = -4
     this.on_ground = false
@@ -118,10 +125,10 @@ levels[1] = {
    end
 	end,
 	draw = function(this)
-	 rectfill(0, 0, 127, 63, 15)
-  line(0, 64, 127, 64, 14)
-  spr(1,this.dino_x, this.dino_y)
-  spr(32,this.obstacle.x, 56)
+	  rectfill(0, 0, 127, 63, 15)
+    line(0, 64, 127, 64, 5)
+    spr(1,this.dino_x, this.dino_y)
+    spr(32,this.obstacle.x, 56)
 	end
 }
 
@@ -138,38 +145,44 @@ levels[2] = {
 -->8
 -- neural network
 nn = {
-  input = {
-    {
-    	desc = "distance between dino and obstacle", 
-    	value = 0
-  	}
-  },
+  input = {},
   hiddenlayer1nodes = {},
   hiddenlayer2nodes = {},
-  hiddenlayer3nodes = {},
   output = {},
   tmrnt = 0,
-  init = function(this, num_inputs, hidden_layer_nodes)
-    -- hidden_layer_nodes is a table like: {3, 2, 1}
+  curel = {
+    x = 1,
+    y = 1,
+    xmax = 1,
+    ymax = {}
+  },
+  init = function(this, input, hidden_layer_nodes, output)
+    this.input = input
+    this.output = output
+    -- hidden_layer_nodes is a table like. Example {2, 1}
     -- for up to 3 hidden layers with corresponding node counts
 
     -- clear existing layers
     nn.hiddenlayer1nodes = {}
     nn.hiddenlayer2nodes = {}
-    nn.hiddenlayer3nodes = {}
+
+    this.curel.xmax = 2
+    add(this.curel.ymax,#input)
 
     -- initialize hidden layers
     if #hidden_layer_nodes >= 1 then
-        nn.hiddenlayer1nodes = init_layer(hidden_layer_nodes[1], num_inputs)
+        nn.hiddenlayer1nodes = init_layer(hidden_layer_nodes[1], #input)
+        add(this.curel.ymax,#nn.hiddenlayer1nodes)
+        this.curel.xmax += #input + 1 -- bias
     end
 
     if #hidden_layer_nodes >= 2 then
         nn.hiddenlayer2nodes = init_layer(hidden_layer_nodes[2], hidden_layer_nodes[1])
+        add(this.curel.ymax,#nn.hiddenlayer2nodes)
+        this.curel.xmax += hidden_layer_nodes[1]
     end
 
-    if #hidden_layer_nodes >= 3 then
-        nn.hiddenlayer3nodes = init_layer(hidden_layer_nodes[3], hidden_layer_nodes[2])
-    end
+    add(this.curel.ymax,#output)
 
     --start: mockup neural values
     nn.hiddenlayer1nodes[1].w0=1
@@ -177,24 +190,56 @@ nn = {
     --end: mockup neural values
   end,
   update=function(this,inputs)
+    if btnp(0) and this.curel.x > 1 then this.curel.x-=1 end
+    if btnp(1) and this.curel.x < this.curel.xmax then this.curel.x+=1 end
+    if btnp(2) and this.curel.y > 1 then this.curel.y-=1 end
+    if btnp(3) and this.curel.y < this.curel.ymax[this.curel.x] then this.curel.y+=1 end
+
     for i=1,#this.input do
 			this.input[i].value = inputs[i]
 		end
 
-    --start: mockup neural calculation
-    local y = nil
+    -- reset values
+    local res = {}
+
     this.tmrnt += 1
     if this.tmrnt > 5 then
         this.tmrnt = 0
-        y = calculate_output()[1] --this.input[1].value * 1 + 20
+        res = calculate_output()
     end
-    --end: mockup neural calculation
-    return y
+
+    for i=1,#res do
+      this.output[i].value = res[i]
+    end
   end,
   draw=function(this)
+    rectfill(0, 119, 127, 127, 5)
+
     for i=1,#this.input do
-			spr(54,0,64+(i-1)*16)
-			print(this.input[i].value,0,72+(i-1)*16,12)
+			spr(54,2,66+(i-1)*16)
+			print(this.input[i].value,2,74+(i-1)*16,12)
+      if this.curel.x == 1 then
+        spr(48,2,66+(i-1)*16)
+        print(this.input[i].desc,2,121,12)
+      end
+		end
+
+    for i=1,#this.hiddenlayer1nodes do
+      for j=1,#this.input + 1 do
+			  spr(49,10 + (j)*8,66+(i-1)*16)
+        if this.curel.x == 1 + j then
+          spr(48,10 + (j)*8,66+(i-1)*16)
+          print("layer:1 node:"..i.." w"..(j-1),2,121,12)
+        end
+      end      
+		end
+    
+    for i=1,#this.output do
+			spr(55,110,66+(i-1)*16)
+      if this.curel.x == this.curel.xmax then
+        spr(48,110,66+(i-1)*16)
+        print("output: "..this.output[i].desc,2,121,12)
+      end
 		end
   end
 }
@@ -222,22 +267,13 @@ function calculate_output()
   
   local out1 = nil
   local out2 = nil
-  local out3 = nil
 
   if #nn.hiddenlayer1nodes > 0 then
       out1 = process_layer(nn.hiddenlayer1nodes, input_values)
   end
 
   if #nn.hiddenlayer2nodes > 0 then
-      out2 = process_layer(nn.hiddenlayer2nodes, out1)
-  end
-
-  if #nn.hiddenlayer3nodes > 0 then
-      return process_layer(nn.hiddenlayer3nodes, out2)
-  end
-  
-  if out2 != nil then
-  		return out2
+      return process_layer(nn.hiddenlayer2nodes, out1)
   end
   
   return out1
@@ -253,7 +289,6 @@ function process_layer(layer, inputs)
          sum += node["w"..(j-1)] * inputs[j]
      end
      sum += node.b
-     printh(inputs[1]..","..node.b..","..node.w0..","..sum)
      outputs[i] = sigmoid(sum)
  end
  return outputs
