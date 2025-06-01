@@ -17,6 +17,21 @@ https://www.lexaloffle.com/bbs/?tid=142633
 ## Keyboard shortcuts
 
 puny font mode (Ctrl+P).
+
+## Debug
+
+In, shortcut, update target:
+
+cmd /c "C:\Program Files (x86)\PICO-8\pico8.exe"
+
+printh("add text to debug here")
+
+example:
+````lua
+printh(inputs[1]..","..node.b..","..node.w0..","..sum)
+```
+
+![debug](debug.png)
  
 ## References:
 

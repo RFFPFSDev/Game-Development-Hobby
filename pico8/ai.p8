@@ -3,7 +3,7 @@ version 42
 __lua__
 -- main game
 function _init()
-		state=intro
+	state=intro
 end
 
 function _update()
@@ -68,7 +68,7 @@ game = {
 	draw = function()
 			cls()
 			levels[curtlvl]:draw()
-			nt:draw()
+			nn:draw()
 	end
 }
 
@@ -90,17 +90,19 @@ levels[1] = {
 	end,
 	init = function(this)
 			this:add_obstacle()
+      nn:init(1,{1})
 	end,
 	update = function(this)
 			this.obstacle.x -= this.obs_speed
       
    if this.obstacle.x < -8 then
-     this:add_obstacle()
+      this:add_obstacle()
    end
    
    local x0 = this.dino_x - this.obstacle.x
+   y = nn:update({x0})
    
-   if nt:calcy(x0) > 0 and this.on_ground then
+   if y and this.on_ground then
     this.dino_vy = -4
     this.on_ground = false
    end
@@ -135,38 +137,132 @@ levels[2] = {
 
 -->8
 -- neural network
-nt={
-	tmrnt = 0,
-	input={
-		{
-			label="dist",
-			desc="distance between dino and obstacle",	
-			value=0
-		}
-	},
-	node={
-		{
-				w0=1,
-				b=20 -- mockup values
-		}
-	},
-	calcy=function(this,x0)   
-		this.tmrnt += 1
-		if this.tmrnt > 5 then
-			this.tmrnt = 0
-			-- fix this to be dinamic
-			this.input[1].value=x0
-			return x0 * this.node[1].w0 + this.node[1].b
+nn = {
+  input = {
+    {
+    	desc = "distance between dino and obstacle", 
+    	value = 0
+  	}
+  },
+  hiddenlayer1nodes = {},
+  hiddenlayer2nodes = {},
+  hiddenlayer3nodes = {},
+  output = {},
+  tmrnt = 0,
+  init = function(this, num_inputs, hidden_layer_nodes)
+    -- hidden_layer_nodes is a table like: {3, 2, 1}
+    -- for up to 3 hidden layers with corresponding node counts
+
+    -- clear existing layers
+    nn.hiddenlayer1nodes = {}
+    nn.hiddenlayer2nodes = {}
+    nn.hiddenlayer3nodes = {}
+
+    -- initialize hidden layers
+    if #hidden_layer_nodes >= 1 then
+        nn.hiddenlayer1nodes = init_layer(hidden_layer_nodes[1], num_inputs)
+    end
+
+    if #hidden_layer_nodes >= 2 then
+        nn.hiddenlayer2nodes = init_layer(hidden_layer_nodes[2], hidden_layer_nodes[1])
+    end
+
+    if #hidden_layer_nodes >= 3 then
+        nn.hiddenlayer3nodes = init_layer(hidden_layer_nodes[3], hidden_layer_nodes[2])
+    end
+
+    --start: mockup neural values
+    nn.hiddenlayer1nodes[1].w0=1
+		nn.hiddenlayer1nodes[1].b=20
+    --end: mockup neural values
+  end,
+  update=function(this,inputs)
+    for i=1,#this.input do
+			this.input[i].value = inputs[i]
 		end
-		return 0
-	end,
-	draw=function(this)
-		for i=1,#this.input do
+
+    --start: mockup neural calculation
+    local y = nil
+    this.tmrnt += 1
+    if this.tmrnt > 5 then
+        this.tmrnt = 0
+        y = calculate_output()[1] --this.input[1].value * 1 + 20
+    end
+    --end: mockup neural calculation
+    return y
+  end,
+  draw=function(this)
+    for i=1,#this.input do
 			spr(54,0,64+(i-1)*16)
 			print(this.input[i].value,0,72+(i-1)*16,12)
 		end
-	end
+  end
 }
+
+-- helper to initialize a layer
+function init_layer(num_nodes, num_inputs)
+  local layer = {}
+  for i=1,num_nodes do
+      local node = {}
+      -- initialize weights for each input
+      for j=1,num_inputs do
+          node["w"..(j-1)] = 0 -- or random value like rnd()
+      end
+      node["b"] = 0 -- bias
+      add(layer, node)
+  end
+  return layer
+end
+
+function calculate_output()
+  local input_values = {}
+  for i=1,#nn.input do
+      input_values[i] = nn.input[i].value
+  end
+  
+  local out1 = nil
+  local out2 = nil
+  local out3 = nil
+
+  if #nn.hiddenlayer1nodes > 0 then
+      out1 = process_layer(nn.hiddenlayer1nodes, input_values)
+  end
+
+  if #nn.hiddenlayer2nodes > 0 then
+      out2 = process_layer(nn.hiddenlayer2nodes, out1)
+  end
+
+  if #nn.hiddenlayer3nodes > 0 then
+      return process_layer(nn.hiddenlayer3nodes, out2)
+  end
+  
+  if out2 != nil then
+  		return out2
+  end
+  
+  return out1
+end
+
+-- function to calculate a layer output
+function process_layer(layer, inputs)
+ local outputs = {}
+ for i=1,#layer do
+     local node = layer[i]
+     local sum = 0
+     for j=1,#inputs do
+         sum += node["w"..(j-1)] * inputs[j]
+     end
+     sum += node.b
+     printh(inputs[1]..","..node.b..","..node.w0..","..sum)
+     outputs[i] = sigmoid(sum)
+ end
+ return outputs
+end
+
+function sigmoid(res)
+  return res > 0
+end
+
 __gfx__
 00000000000033330000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000030330550055200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -193,10 +289,10 @@ __gfx__
 000ee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000ee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0c0c0c0c006556000055660000666600006666000066660000000000000000000000000000000000000000000000000000000000000000000000000000000000
-c0000000066556600655666005566660066666600666666000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000000c666556666655666665556666555666666666666600111100003333000088880000000000000000000000000000000000000000000000000000000000
-c0000000666556666665566666555666555556665555566601cccc1003bbbb3008eeee8000000000000000000000000000000000000000000000000000000000
-0000000c666556666665566666655666666556665555566601cccc1003bbbb3008eeee8000000000000000000000000000000000000000000000000000000000
-c0000000666666666666666666666666666666666666666600111100003333000088880000000000000000000000000000000000000000000000000000000000
-0000000c066666600666666006666660066666600666666000000000000000000000000000000000000000000000000000000000000000000000000000000000
+c0000000066556600655666005566660066666600666666000000000000000000000000000dddd00000000000000000000000000000000000000000000000000
+0000000c66655666665566666555666655566666666666660011110000333300008888000dddddd0000000000000000000000000000000000000000000000000
+c0000000666556666665566666555666555556665555566601cccc1003bbbb3008eeee800dddddd0000000000000000000000000000000000000000000000000
+0000000c666556666665566666655666666556665555566601cccc1003bbbb3008eeee800dddddd0000000000000000000000000000000000000000000000000
+c000000066666666666666666666666666666666666666660011110000333300008888000dddddd0000000000000000000000000000000000000000000000000
+0000000c066666600666666006666660066666600666666000000000000000000000000000dddd00000000000000000000000000000000000000000000000000
 c0c0c0c0006666000066660000666600006666000066660000000000000000000000000000000000000000000000000000000000000000000000000000000000
