@@ -27,7 +27,8 @@ cmd /c "C:\Program Files (x86)\PICO-8\pico8.exe"
 printh("add text to debug here")
 
 example:
-````lua
+
+```lua
 printh(inputs[1]..","..node.b..","..node.w0..","..sum)
 ```
 
